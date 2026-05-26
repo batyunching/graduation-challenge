@@ -1,6 +1,6 @@
 const HARD_CODED_SUPABASE = {
-  url: "https://nqprijiqyxknwdapwcbh.supabase.co",
-  anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5xcHJpamlxeXhrbndkYXB3Y2JoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MDY1MjIsImV4cCI6MjA5NTI4MjUyMn0.A2fzH25tzX1z_t674JmYIgC4nt2gsm7xl9MAjYc34W8"
+  url: "",
+  anonKey: ""
 };
 
 const EVENT_ID = "daguan-graduation-2026";
@@ -743,6 +743,23 @@ function renderAdmin() {
           </div>
         </div>
       </div>
+      <div class="panel approval-zone">
+        <div>
+          <h2>批次通過審核</h2>
+          <p>可將目前選取班級或全部學生已送出的答案與照片一次標記為通過。尚未送出的任務不會被建立或通過。</p>
+        </div>
+        <div class="action-row">
+          <button
+            class="button primary"
+            data-action="bulk-approve"
+            data-approve-scope="class"
+            data-approve-value="${escapeAttribute(state.filters.classNo)}"
+            ${state.filters.classNo === "all" ? "disabled" : ""}
+          >${icon("check-check")}通過${state.filters.classNo === "all" ? "指定班級" : `${state.filters.classNo}班已送出項目`}</button>
+          <button class="button river" data-action="bulk-approve" data-approve-scope="all">${icon("badge-check")}通過全部已送出項目</button>
+        </div>
+        <p class="muted small">若要通過一整班，請先在「班級篩選」選定班級，再按通過班級已送出項目。</p>
+      </div>
       <div class="panel danger-zone">
         <div>
           <h2>刪除測試資料</h2>
@@ -1003,6 +1020,11 @@ async function handleClick(event) {
 
     if (action.dataset.action === "delete-data") {
       await handleDeleteData(action.dataset.deleteScope, action.dataset.deleteValue || "");
+      return;
+    }
+
+    if (action.dataset.action === "bulk-approve") {
+      await handleBulkApprove(action.dataset.approveScope, action.dataset.approveValue || "");
       return;
     }
   }
@@ -1423,6 +1445,129 @@ async function reviewSubmission(submissionId, status) {
     saveDemoDb(db);
     showToast(status === "approved" ? "已標記通過。" : "已退回補件。");
   }
+}
+
+async function handleBulkApprove(scope, value) {
+  if (!state.session || state.session.role !== "teacher") {
+    showToast("只有老師組可以批次通過。");
+    return;
+  }
+
+  const target = getBulkApproveTarget(scope, value);
+  if (!target) {
+    showToast("請先選擇要批次通過的資料。");
+    return;
+  }
+
+  if (!target.submissions.length) {
+    showToast(`${target.label}目前沒有需要通過的已送出項目。`);
+    return;
+  }
+
+  const ok = window.confirm(
+    `是否確認將「${target.label}」的 ${target.submissions.length} 筆已送出項目批次標記為通過？\n\n尚未送出的任務不會被建立。`
+  );
+  if (!ok) return;
+
+  try {
+    const approvedCount = state.usingSupabase && state.client
+      ? await bulkApproveSupabase(target.submissions)
+      : bulkApproveDemo(target.submissions);
+
+    await refreshData();
+    showToast(`已批次通過 ${approvedCount} 筆已送出項目。`);
+    render();
+  } catch (error) {
+    console.error(error);
+    showToast(`批次通過失敗：${error.message || "請稍後再試"}`);
+  }
+}
+
+function getBulkApproveTarget(scope, value) {
+  const groups = state.groups.filter((group) => {
+    if (group.role !== "student") return false;
+    if (scope === "all") return true;
+    if (scope === "class") return group.class_no === value && value !== "all";
+    return false;
+  });
+
+  if (scope === "class" && (!value || value === "all")) return null;
+  if (scope !== "class" && scope !== "all") return null;
+
+  const groupIds = new Set(groups.map((group) => group.group_id));
+  const submissions = state.submissions.filter(
+    (submission) => groupIds.has(submission.group_id) && submission.teacher_status !== "approved"
+  );
+
+  return {
+    label: scope === "class" ? `${value}班` : "全部學生",
+    submissions
+  };
+}
+
+async function bulkApproveSupabase(submissions) {
+  const now = new Date().toISOString();
+  const note = "老師批次通過";
+  const ids = submissions.map((submission) => submission.submission_id).filter(Boolean);
+  const chunkSize = 500;
+
+  for (let index = 0; index < ids.length; index += chunkSize) {
+    const chunk = ids.slice(index, index + chunkSize);
+    const update = await state.client
+      .from("submissions")
+      .update({ teacher_status: "approved", teacher_note: note, reviewed_at: now })
+      .in("submission_id", chunk);
+    if (update.error) throw update.error;
+  }
+
+  const logs = ids.map((submissionId) => ({
+    log_id: crypto.randomUUID(),
+    submission_id: submissionId,
+    reviewer_group_id: state.session.groupId,
+    action: "approved",
+    note,
+    created_at: now
+  }));
+
+  for (let index = 0; index < logs.length; index += chunkSize) {
+    const insert = await state.client.from("review_logs").insert(logs.slice(index, index + chunkSize));
+    if (insert.error) throw insert.error;
+  }
+
+  return ids.length;
+}
+
+function bulkApproveDemo(submissions) {
+  const db = getDemoDb();
+  const now = new Date().toISOString();
+  const note = "老師批次通過";
+  const ids = new Set(submissions.map((submission) => submission.submission_id));
+  let count = 0;
+
+  db.submissions = db.submissions.map((submission) => {
+    if (!ids.has(submission.submission_id)) return submission;
+    count += 1;
+    return {
+      ...submission,
+      teacher_status: "approved",
+      teacher_note: note,
+      reviewed_at: now
+    };
+  });
+
+  submissions.forEach((submission) => {
+    db.reviewLogs.push({
+      log_id: crypto.randomUUID(),
+      submission_id: submission.submission_id,
+      reviewer_group_id: state.session.groupId,
+      action: "approved",
+      note,
+      created_at: now
+    });
+  });
+
+  saveDemoDb(db);
+  return count;
 }
 
 async function handleDeleteData(scope, value) {

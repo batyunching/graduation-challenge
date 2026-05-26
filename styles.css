@@ -591,6 +591,20 @@ img {
   background: #fffafa;
 }
 
+.approval-zone {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+  border-color: rgba(25, 116, 74, 0.2);
+  background: #f7fffb;
+}
+
+.approval-zone p {
+  margin: 6px 0 0;
+}
+
 .danger-zone p {
   margin: 6px 0 0;
 }
@@ -715,12 +729,14 @@ img {
   .grid.two,
   .grid.three,
   .form-grid,
+  .approval-zone,
   .danger-zone,
   .admin-row,
   .rank-row {
     grid-template-columns: 1fr;
   }
 
+  .approval-zone,
   .danger-zone {
     display: grid;
   }
