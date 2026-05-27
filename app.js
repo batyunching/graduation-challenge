@@ -1,6 +1,6 @@
 const HARD_CODED_SUPABASE = {
-  url: "",
-  anonKey: ""
+  url: "https://nqprijiqyxknwdapwcbh.supabase.co",
+  anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5xcHJpamlxeXhrbndkYXB3Y2JoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MDY1MjIsImV4cCI6MjA5NTI4MjUyMn0.A2fzH25tzX1z_t674JmYIgC4nt2gsm7xl9MAjYc34W8"
 };
 
 const EVENT_ID = "daguan-graduation-2026";
