@@ -18,7 +18,8 @@ const CLASSES = Array.from({ length: 14 }, (_, index) => String(901 + index));
 const GROUP_OPTIONS = Array.from({ length: 10 }, (_, index) => index + 1);
 const HERO_IMAGE = driveImage("1Hd1jj0byqELqb69whpvxcAcyIfCHVPB1", 2400);
 const MAP_IMAGE = driveImage("10yJE0RUhzznNDEHdnsxzaA1CyHTlPKK8", 1800);
-const TAMSUI_EIGHT_VIEWS_IMAGE = driveImage("18GsR-GQp5uHty028sCynNCh9AdWWaB3S", 1800);
+const TAMSUI_EIGHT_VIEWS_IMAGE =
+  "https://drive.google.com/thumbnail?id=18GsR-GQp5uHty028sCynNCh9AdWWaB3S&sz=w1800";
 
 const SECTIONS = {
   hardhan: {
